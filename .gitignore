@@ -1,0 +1,5 @@
+# Runtime data
+api/data/
+
+# Compiled binaries
+api/vulcan

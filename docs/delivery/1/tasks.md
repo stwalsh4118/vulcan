@@ -8,14 +8,14 @@ This document lists all tasks associated with PBI 1.
 
 | Task ID | Name | Status | Description |
 | :------ | :--- | :----- | :---------- |
-| 1-1 | [Go module & project structure](./1-1.md) | Proposed | Initialize Go module, create directory layout, and produce a compilable main.go |
-| 1-2 | [Configuration & structured logging](./1-2.md) | Proposed | Config struct loaded from env vars, structured JSON logger to stdout |
-| 1-3 | [Workload domain types](./1-3.md) | Proposed | Workload struct, status/isolation/runtime constants, ULID ID generation |
-| 1-4 | [SQLite persistence layer](./1-4.md) | Proposed | SQLite connection, workloads table migration, and full CRUD operations |
-| 1-5 | [HTTP server with chi & middleware](./1-5.md) | Proposed | chi router setup, middleware stack, graceful shutdown |
-| 1-6 | [Health & metrics endpoints](./1-6.md) | Proposed | GET /healthz and GET /metrics with Prometheus |
-| 1-7 | [Workload API endpoints](./1-7.md) | Proposed | POST, GET (single + list), DELETE workload endpoints with validation |
-| 1-8 | [E2E CoS Test](./1-8.md) | Proposed | End-to-end verification of all PBI 1 acceptance criteria |
+| 1-1 | [Go module & project structure](./1-1.md) | Done | Initialize Go module, create directory layout, and produce a compilable main.go |
+| 1-2 | [Configuration & structured logging](./1-2.md) | Done | Config struct loaded from env vars, structured JSON logger to stdout |
+| 1-3 | [Workload domain types](./1-3.md) | Done | Workload struct, status/isolation/runtime constants, ULID ID generation |
+| 1-4 | [SQLite persistence layer](./1-4.md) | Done | SQLite connection, workloads table migration, and full CRUD operations |
+| 1-5 | [HTTP server with chi & middleware](./1-5.md) | Done | chi router setup, middleware stack, graceful shutdown |
+| 1-6 | [Health & metrics endpoints](./1-6.md) | Done | GET /healthz and GET /metrics with Prometheus |
+| 1-7 | [Workload API endpoints](./1-7.md) | Done | POST, GET (single + list), DELETE workload endpoints with validation |
+| 1-8 | [E2E CoS Test](./1-8.md) | Done | End-to-end verification of all PBI 1 acceptance criteria |
 
 ## Dependency Graph
 
