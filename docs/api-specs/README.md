@@ -5,7 +5,9 @@ and ensure consistency across the project.
 
 ## Available Specs
 
-_No specs yet. Specs will be created as PBIs are implemented._
+| System | Spec File | Description |
+|--------|-----------|-------------|
+| Core API | [core/core-api.md](./core/core-api.md) | Server config, workload model, store interface, REST endpoints |
 
 ## Organization
 

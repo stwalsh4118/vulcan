@@ -1,0 +1,4 @@
+tasks:
+  provider: "markdown-tasks"
+  args:
+    path: "docs/delivery"
