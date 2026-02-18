@@ -54,4 +54,4 @@ N/A — backend/infrastructure PBI. API responses follow the JSON format defined
 
 ## Related Tasks
 
-_Tasks will be created when this PBI moves to Agreed via `/plan-pbi 1`._
+[View Tasks](./tasks.md)
