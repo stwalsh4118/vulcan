@@ -8,15 +8,15 @@ This document lists all tasks associated with PBI 3.
 
 | Task ID | Name | Status | Description |
 | :------ | :--- | :----- | :---------- |
-| 3-1 | [Next.js project scaffolding & Tailwind dark theme](./3-1.md) | Proposed | Initialize Next.js 14+ with App Router, TypeScript, Tailwind CSS dark theme; verify pnpm dev starts |
-| 3-2 | [API client layer & TypeScript types](./3-2.md) | Proposed | Typed fetch wrapper for all backend endpoints; TypeScript types matching Go models; React Query for data fetching |
-| 3-3 | [App shell layout & navigation](./3-3.md) | Proposed | Root layout with dark theme, sidebar navigation, status badge components, desktop-first responsive shell |
-| 3-4 | [Dashboard home page](./3-4.md) | Proposed | Route `/` showing recent workloads and aggregate stats from the API |
-| 3-5 | [Workload list page with pagination & filtering](./3-5.md) | Proposed | Route `/workloads` with paginated workload table, status filtering, and color-coded status badges |
-| 3-6 | [Workload submission form with code editor](./3-6.md) | Proposed | Route `/workloads/new` with runtime/isolation selectors, code editor, JSON input, resource limits, submit to API |
-| 3-7 | [Workload detail page](./3-7.md) | Proposed | Route `/workloads/[id]` showing status, output, error, duration, isolation, timestamps with auto-polling |
-| 3-8 | [Real-time log streaming](./3-8.md) | Proposed | EventSource SSE integration on detail page with auto-scroll and pause/resume |
-| 3-9 | [E2E CoS Test](./3-9.md) | Proposed | End-to-end tests verifying all 8 acceptance criteria for PBI 3 |
+| 3-1 | [Next.js project scaffolding & Tailwind dark theme](./3-1.md) | Done | Initialize Next.js 14+ with App Router, TypeScript, Tailwind CSS dark theme; verify pnpm dev starts |
+| 3-2 | [API client layer & TypeScript types](./3-2.md) | Done | Typed fetch wrapper for all backend endpoints; TypeScript types matching Go models; React Query for data fetching |
+| 3-3 | [App shell layout & navigation](./3-3.md) | Done | Root layout with dark theme, sidebar navigation, status badge components, desktop-first responsive shell |
+| 3-4 | [Dashboard home page](./3-4.md) | Done | Route `/` showing recent workloads and aggregate stats from the API |
+| 3-5 | [Workload list page with pagination & filtering](./3-5.md) | Done | Route `/workloads` with paginated workload table, status filtering, and color-coded status badges |
+| 3-6 | [Workload submission form with code editor](./3-6.md) | Done | Route `/workloads/new` with runtime/isolation selectors, code editor, JSON input, resource limits, submit to API |
+| 3-7 | [Workload detail page](./3-7.md) | Done | Route `/workloads/[id]` showing status, output, error, duration, isolation, timestamps with auto-polling |
+| 3-8 | [Real-time log streaming](./3-8.md) | Done | EventSource SSE integration on detail page with auto-scroll and pause/resume |
+| 3-9 | [E2E CoS Test](./3-9.md) | Done | End-to-end tests verifying all 8 acceptance criteria for PBI 3 |
 
 ## Dependency Graph
 
