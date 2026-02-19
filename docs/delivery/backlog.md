@@ -14,7 +14,7 @@
 | 6 | User | As a user, I want to run OCI container workloads in gVisor so that I get syscall-level isolation for any containerized application and can test this from the frontend | Proposed | containerd pulls and caches OCI images; runsc executes containers with gVisor sandboxing; resource limits enforced; frontend supports OCI image reference input and shows results |
 | 7 | User | As a user, I want a CLI tool to submit and manage workloads from the terminal so that I can script and automate compute tasks | Proposed | `vulcan run` executes workloads (inline, file, OCI); `vulcan status` shows workload state; `vulcan logs -f` streams logs; `vulcan ls` lists workloads; `vulcan nodes` shows cluster; `vulcan benchmark` runs comparison suite |
 | 8 | User | As a user, I want a monitoring and benchmark dashboard so that I can compare backend performance and view system health visually | Proposed | Dashboard shows node status and capacity; backend capabilities displayed; aggregate stats visualized; benchmark suite runnable from UI; comparison charts show cold start, throughput, memory per backend |
-| 9 | User | As a user, I want to view workload logs after execution completes so that I can debug and review past workloads | Agreed | Log lines persisted to SQLite during execution; API endpoint returns historical logs; frontend shows persisted logs for completed workloads; SSE still works for active workloads; seamless transition from live to historical |
+| 9 | User | As a user, I want to view workload logs after execution completes so that I can debug and review past workloads | Done | Log lines persisted to SQLite during execution; API endpoint returns historical logs; frontend shows persisted logs for completed workloads; SSE still works for active workloads; seamless transition from live to historical |
 
 _Items are ordered by priority (highest first)._
 
@@ -48,3 +48,5 @@ _Items are ordered by priority (highest first)._
 | 2026-02-19 06:18:27 | 3 | Status Change | InProgress → Done. All 9 tasks completed and verified. | AI_Agent |
 | 20260219-061510 | 9 | Created | PBI created from feature request: Log persistence — store workload log lines in SQLite so they can be viewed after completion. | AI_Agent |
 | 2026-02-19 07:13:19 | 9 | Status Change | Proposed → Agreed. Auto-approved for planning. | AI_Agent |
+| 2026-02-19 07:20:40 | 9 | Status Change | Agreed → InProgress. Started implementation. | AI_Agent |
+| 2026-02-19 07:57:42 | 9 | Status Change | InProgress → Done. All 6 tasks completed and verified. | AI_Agent |

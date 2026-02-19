@@ -8,12 +8,12 @@ This document lists all tasks associated with PBI 9.
 
 | Task ID | Name | Status | Description |
 | :------ | :--- | :----- | :---------- |
-| 9-1 | [LogLine Model & Store Interface Extension](./9-1.md) | Proposed | Add LogLine struct to model package and extend Store interface with InsertLogLine/GetLogLines methods |
-| 9-2 | [SQLite Log Persistence Implementation](./9-2.md) | Proposed | Add log_lines table migration and implement InsertLogLine/GetLogLines on SQLiteStore |
-| 9-3 | [Engine Dual-Write to LogBroker & SQLite](./9-3.md) | Proposed | Modify LogWriter callback to persist log lines to SQLite alongside LogBroker publish |
-| 9-4 | [Historical Logs API Endpoint](./9-4.md) | Proposed | Add GET /v1/workloads/:id/logs/history endpoint returning persisted log lines as JSON |
-| 9-5 | [Frontend Historical Log Viewing](./9-5.md) | Proposed | Update useLogStream hook and LogViewer to fetch and display persisted logs for terminal workloads |
-| 9-6 | [E2E CoS Test](./9-6.md) | Proposed | End-to-end tests verifying all PBI 9 acceptance criteria |
+| 9-1 | [LogLine Model & Store Interface Extension](./9-1.md) | Done | Add LogLine struct to model package and extend Store interface with InsertLogLine/GetLogLines methods |
+| 9-2 | [SQLite Log Persistence Implementation](./9-2.md) | Done | Add log_lines table migration and implement InsertLogLine/GetLogLines on SQLiteStore |
+| 9-3 | [Engine Dual-Write to LogBroker & SQLite](./9-3.md) | Done | Modify LogWriter callback to persist log lines to SQLite alongside LogBroker publish |
+| 9-4 | [Historical Logs API Endpoint](./9-4.md) | Done | Add GET /v1/workloads/:id/logs/history endpoint returning persisted log lines as JSON |
+| 9-5 | [Frontend Historical Log Viewing](./9-5.md) | Done | Update useLogStream hook and LogViewer to fetch and display persisted logs for terminal workloads |
+| 9-6 | [E2E CoS Test](./9-6.md) | Done | End-to-end tests verifying all PBI 9 acceptance criteria |
 
 ## Dependency Graph
 
