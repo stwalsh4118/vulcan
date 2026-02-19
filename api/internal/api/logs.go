@@ -75,6 +75,56 @@ func (s *Server) handleStreamLogs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// logHistoryLine is a single log line in the history response.
+type logHistoryLine struct {
+	Seq       int    `json:"seq"`
+	Line      string `json:"line"`
+	CreatedAt string `json:"created_at"`
+}
+
+// logHistoryResponse is the JSON response for GET /v1/workloads/:id/logs/history.
+type logHistoryResponse struct {
+	WorkloadID string           `json:"workload_id"`
+	Lines      []logHistoryLine `json:"lines"`
+}
+
+func (s *Server) handleGetLogHistory(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	// Verify workload exists.
+	_, err := s.store.GetWorkload(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		s.writeError(w, http.StatusNotFound, "workload not found")
+		return
+	}
+	if err != nil {
+		s.logger.Error("get workload for log history", "error", err)
+		s.writeError(w, http.StatusInternalServerError, "failed to get workload")
+		return
+	}
+
+	logLines, err := s.store.GetLogLines(r.Context(), id)
+	if err != nil {
+		s.logger.Error("get log lines", "error", err)
+		s.writeError(w, http.StatusInternalServerError, "failed to get log lines")
+		return
+	}
+
+	lines := make([]logHistoryLine, len(logLines))
+	for i, l := range logLines {
+		lines[i] = logHistoryLine{
+			Seq:       l.Seq,
+			Line:      l.Line,
+			CreatedAt: l.CreatedAt.Format(time.RFC3339),
+		}
+	}
+
+	s.writeJSON(w, http.StatusOK, logHistoryResponse{
+		WorkloadID: id,
+		Lines:      lines,
+	})
+}
+
 // writeSSEData writes a log line as an SSE data event. Multi-line strings are
 // split so that each segment gets its own "data:" prefix, per the SSE spec.
 func writeSSEData(w http.ResponseWriter, line string) error {

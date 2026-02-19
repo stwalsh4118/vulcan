@@ -3,6 +3,8 @@ package api
 import (
 	"bufio"
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -128,6 +130,122 @@ func TestStreamLogsReceivesEvents(t *testing.T) {
 	}
 	if events[1] != "goodbye" {
 		t.Errorf("event[1] = %q, want %q", events[1], "goodbye")
+	}
+}
+
+func TestGetLogHistoryHappyPath(t *testing.T) {
+	srv := newTestServer(t)
+
+	wl := &model.Workload{
+		ID:        model.NewID(),
+		Status:    model.StatusPending,
+		Isolation: "isolate",
+		Runtime:   "node",
+		CreatedAt: time.Now().UTC(),
+	}
+	if err := srv.store.CreateWorkload(context.Background(), wl); err != nil {
+		t.Fatalf("CreateWorkload: %v", err)
+	}
+
+	// Insert some log lines.
+	for i := 0; i < 3; i++ {
+		if err := srv.store.InsertLogLine(context.Background(), wl.ID, i, fmt.Sprintf("line %d", i)); err != nil {
+			t.Fatalf("InsertLogLine[%d]: %v", i, err)
+		}
+	}
+
+	ts := httptest.NewServer(srv.Router())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/v1/workloads/" + wl.ID + "/logs/history")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+
+	var body logHistoryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if body.WorkloadID != wl.ID {
+		t.Errorf("workload_id = %q, want %q", body.WorkloadID, wl.ID)
+	}
+	if len(body.Lines) != 3 {
+		t.Fatalf("len(lines) = %d, want 3", len(body.Lines))
+	}
+	for i, l := range body.Lines {
+		if l.Seq != i {
+			t.Errorf("lines[%d].seq = %d, want %d", i, l.Seq, i)
+		}
+		want := fmt.Sprintf("line %d", i)
+		if l.Line != want {
+			t.Errorf("lines[%d].line = %q, want %q", i, l.Line, want)
+		}
+	}
+}
+
+func TestGetLogHistoryEmpty(t *testing.T) {
+	srv := newTestServer(t)
+
+	wl := &model.Workload{
+		ID:        model.NewID(),
+		Status:    model.StatusPending,
+		Isolation: "isolate",
+		Runtime:   "node",
+		CreatedAt: time.Now().UTC(),
+	}
+	if err := srv.store.CreateWorkload(context.Background(), wl); err != nil {
+		t.Fatalf("CreateWorkload: %v", err)
+	}
+
+	ts := httptest.NewServer(srv.Router())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/v1/workloads/" + wl.ID + "/logs/history")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+
+	var body logHistoryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(body.Lines) != 0 {
+		t.Errorf("len(lines) = %d, want 0", len(body.Lines))
+	}
+	if body.Lines == nil {
+		t.Error("lines is nil, expected empty array")
+	}
+}
+
+func TestGetLogHistoryNotFound(t *testing.T) {
+	srv := newTestServer(t)
+
+	ts := httptest.NewServer(srv.Router())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/v1/workloads/nonexistent/logs/history")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", resp.StatusCode)
 	}
 }
 
