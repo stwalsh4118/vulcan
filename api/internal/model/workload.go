@@ -51,6 +51,15 @@ func ValidTransition(from, to string) bool {
 	return targets[to]
 }
 
+// LogLine represents a single persisted log line from a workload execution.
+type LogLine struct {
+	ID         int64     `json:"id"`
+	WorkloadID string    `json:"workload_id"`
+	Seq        int       `json:"seq"`
+	Line       string    `json:"line"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
 // Workload represents a compute workload submitted to the platform.
 type Workload struct {
 	ID         string     `json:"id"`
