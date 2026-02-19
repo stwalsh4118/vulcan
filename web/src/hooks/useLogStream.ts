@@ -3,30 +3,39 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { WorkloadStatus } from "@/lib/types";
 import { TERMINAL_STATUSES } from "@/lib/types";
+import { getLogHistory } from "@/lib/api";
 
 const LOG_SSE_BASE_URL = "/api/v1/workloads";
 const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_DELAY_MS = 2000;
 
-export type LogStreamState = "connecting" | "connected" | "closed" | "error";
+export type LogStreamState =
+  | "connecting"
+  | "connected"
+  | "closed"
+  | "error"
+  | "historical";
 
-export function useLogStream(workloadId: string, status: WorkloadStatus | undefined) {
+export function useLogStream(
+  workloadId: string,
+  status: WorkloadStatus | undefined,
+) {
   const [lines, setLines] = useState<string[]>([]);
   const [streamState, setStreamState] = useState<LogStreamState>("closed");
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectCountRef = useRef(0);
+  const isTerminal = !!status && TERMINAL_STATUSES.includes(status);
 
   const close = useCallback(() => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
-    setStreamState("closed");
   }, []);
 
+  // SSE streaming for active workloads.
   useEffect(() => {
-    // Only connect for active workloads
-    if (!status || TERMINAL_STATUSES.includes(status)) {
+    if (!status || isTerminal) {
       close();
       return;
     }
@@ -65,7 +74,29 @@ export function useLogStream(workloadId: string, status: WorkloadStatus | undefi
     return () => {
       close();
     };
-  }, [workloadId, status, close]);
+  }, [workloadId, status, isTerminal, close]);
+
+  // Fetch historical logs when workload reaches terminal state.
+  useEffect(() => {
+    if (!isTerminal) return;
+
+    let cancelled = false;
+    getLogHistory(workloadId).then(
+      (resp) => {
+        if (cancelled) return;
+        setLines(resp.lines.map((l) => l.line));
+        setStreamState("historical");
+      },
+      () => {
+        if (cancelled) return;
+        setStreamState("error");
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workloadId, isTerminal]);
 
   return { lines, streamState };
 }
