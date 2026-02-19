@@ -92,4 +92,4 @@ Update the workload detail page and `useLogStream` hook:
 
 ## Related Tasks
 
-_Tasks will be created when this PBI is approved via `/plan-pbi 9`._
+[View Tasks](./tasks.md)
