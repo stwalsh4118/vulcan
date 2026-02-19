@@ -195,6 +195,99 @@ func TestSubmitUnresolvableBackend(t *testing.T) {
 	}
 }
 
+// loggingBackend calls LogWriter with configured lines during execution.
+type loggingBackend struct {
+	lines []string
+}
+
+func (lb *loggingBackend) Execute(_ context.Context, spec backend.WorkloadSpec) (backend.WorkloadResult, error) {
+	for _, line := range lb.lines {
+		if spec.LogWriter != nil {
+			spec.LogWriter(line)
+		}
+	}
+	return backend.WorkloadResult{ExitCode: 0, Output: []byte("done"), LogLines: lb.lines}, nil
+}
+
+func (lb *loggingBackend) Capabilities() backend.BackendCapabilities {
+	return backend.BackendCapabilities{
+		Name:                "logging",
+		SupportedRuntimes:   []string{model.RuntimeNode},
+		SupportedIsolations: []string{model.IsolationIsolate},
+		MaxConcurrency:      10,
+	}
+}
+
+func (lb *loggingBackend) Cleanup(_ context.Context, _ string) error { return nil }
+
+func TestDualWriteLogPersistence(t *testing.T) {
+	expectedLines := []string{"hello", "world", "done"}
+	b := &loggingBackend{lines: expectedLines}
+	eng, s := newTestEngine(t, b)
+
+	w := makeAsyncWorkload()
+	if err := eng.Submit(context.Background(), w); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+
+	waitForStatus(t, s, w.ID, model.StatusCompleted, 5*time.Second)
+
+	// Verify log lines were persisted to the store.
+	lines, err := s.GetLogLines(context.Background(), w.ID)
+	if err != nil {
+		t.Fatalf("GetLogLines: %v", err)
+	}
+	if len(lines) != len(expectedLines) {
+		t.Fatalf("len(lines) = %d, want %d", len(lines), len(expectedLines))
+	}
+	for i, l := range lines {
+		if l.Seq != i {
+			t.Errorf("lines[%d].Seq = %d, want %d", i, l.Seq, i)
+		}
+		if l.Line != expectedLines[i] {
+			t.Errorf("lines[%d].Line = %q, want %q", i, l.Line, expectedLines[i])
+		}
+	}
+}
+
+func TestDualWriteSSEUnaffected(t *testing.T) {
+	expectedLines := []string{"log line 1", "log line 2"}
+	b := &loggingBackend{lines: expectedLines}
+	eng, s := newTestEngine(t, b)
+
+	w := makeAsyncWorkload()
+
+	// Subscribe to log broker before submission.
+	ch, unsub := eng.Broker().Subscribe(w.ID)
+	defer unsub()
+
+	if err := eng.Submit(context.Background(), w); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+
+	// Collect SSE lines from broker.
+	var received []string
+	for line := range ch {
+		received = append(received, line)
+	}
+
+	if len(received) != len(expectedLines) {
+		t.Fatalf("SSE lines = %d, want %d", len(received), len(expectedLines))
+	}
+	for i, line := range received {
+		if line != expectedLines[i] {
+			t.Errorf("SSE line[%d] = %q, want %q", i, line, expectedLines[i])
+		}
+	}
+
+	// Also verify persistence worked.
+	waitForStatus(t, s, w.ID, model.StatusCompleted, 5*time.Second)
+	lines, _ := s.GetLogLines(context.Background(), w.ID)
+	if len(lines) != len(expectedLines) {
+		t.Errorf("persisted lines = %d, want %d", len(lines), len(expectedLines))
+	}
+}
+
 func TestSubmitConcurrent(t *testing.T) {
 	b := &delayBackend{delay: 50 * time.Millisecond, output: []byte("done")}
 	eng, s := newTestEngine(t, b)

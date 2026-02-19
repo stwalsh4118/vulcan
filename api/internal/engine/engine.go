@@ -86,13 +86,21 @@ func (e *Engine) execute(w *model.Workload) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutS)*time.Second)
 	defer cancel()
 
-	// Build the workload spec.
+	// Build the workload spec. The LogWriter dual-writes: persist to SQLite
+	// for historical viewing, then publish to LogBroker for real-time SSE.
+	var seq int
 	spec := backend.WorkloadSpec{
 		ID:        w.ID,
 		Runtime:   w.Runtime,
 		Isolation: w.Isolation,
 		TimeoutS:  timeoutS,
-		LogWriter: func(line string) { e.broker.Publish(w.ID, line) },
+		LogWriter: func(line string) {
+			if err := e.store.InsertLogLine(ctx, w.ID, seq, line); err != nil {
+				e.logger.Error("failed to persist log line", "workload_id", w.ID, "seq", seq, "error", err)
+			}
+			seq++
+			e.broker.Publish(w.ID, line)
+		},
 	}
 	if w.CPULimit != nil {
 		spec.CPULimit = *w.CPULimit
