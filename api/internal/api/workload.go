@@ -135,6 +135,10 @@ func (s *Server) handleDeleteWorkload(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, http.StatusNotFound, "workload not found")
 			return
 		}
+		if errors.Is(err, store.ErrInvalidTransition) {
+			s.writeError(w, http.StatusConflict, "workload cannot be killed in its current state")
+			return
+		}
 		s.logger.Error("delete workload", "error", err)
 		s.writeError(w, http.StatusInternalServerError, "failed to kill workload")
 		return

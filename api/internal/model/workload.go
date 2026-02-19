@@ -16,6 +16,7 @@ const (
 	IsolationMicroVM = "microvm"
 	IsolationIsolate = "isolate"
 	IsolationGVisor  = "gvisor"
+	IsolationAuto    = "auto"
 )
 
 // Runtime constants.
@@ -26,6 +27,29 @@ const (
 	RuntimeWasm   = "wasm"
 	RuntimeOCI    = "oci"
 )
+
+// validTransitions maps each status to the set of statuses it may transition to.
+var validTransitions = map[string]map[string]bool{
+	StatusPending: {
+		StatusRunning: true,
+		StatusFailed:  true,
+		StatusKilled:  true,
+	},
+	StatusRunning: {
+		StatusCompleted: true,
+		StatusFailed:    true,
+		StatusKilled:    true,
+	},
+}
+
+// ValidTransition reports whether transitioning from one status to another is allowed.
+func ValidTransition(from, to string) bool {
+	targets, ok := validTransitions[from]
+	if !ok {
+		return false
+	}
+	return targets[to]
+}
 
 // Workload represents a compute workload submitted to the platform.
 type Workload struct {

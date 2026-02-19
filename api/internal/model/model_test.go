@@ -52,10 +52,47 @@ func TestIsolationConstants(t *testing.T) {
 		{IsolationMicroVM, "microvm"},
 		{IsolationIsolate, "isolate"},
 		{IsolationGVisor, "gvisor"},
+		{IsolationAuto, "auto"},
 	}
 	for _, iso := range isolations {
 		if iso.constant != iso.expected {
 			t.Errorf("isolation constant = %q, want %q", iso.constant, iso.expected)
+		}
+	}
+}
+
+func TestValidTransition(t *testing.T) {
+	valid := []struct {
+		from, to string
+	}{
+		{StatusPending, StatusRunning},
+		{StatusPending, StatusFailed},
+		{StatusPending, StatusKilled},
+		{StatusRunning, StatusCompleted},
+		{StatusRunning, StatusFailed},
+		{StatusRunning, StatusKilled},
+	}
+	for _, tc := range valid {
+		if !ValidTransition(tc.from, tc.to) {
+			t.Errorf("ValidTransition(%q, %q) = false, want true", tc.from, tc.to)
+		}
+	}
+
+	invalid := []struct {
+		from, to string
+	}{
+		{StatusPending, StatusCompleted},
+		{StatusCompleted, StatusRunning},
+		{StatusCompleted, StatusPending},
+		{StatusFailed, StatusPending},
+		{StatusFailed, StatusRunning},
+		{StatusKilled, StatusRunning},
+		{StatusKilled, StatusPending},
+		{StatusRunning, StatusPending},
+	}
+	for _, tc := range invalid {
+		if ValidTransition(tc.from, tc.to) {
+			t.Errorf("ValidTransition(%q, %q) = true, want false", tc.from, tc.to)
 		}
 	}
 }
