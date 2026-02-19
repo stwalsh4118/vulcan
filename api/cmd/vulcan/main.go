@@ -5,7 +5,9 @@ import (
 	"os"
 
 	"github.com/seantiz/vulcan/internal/api"
+	"github.com/seantiz/vulcan/internal/backend"
 	"github.com/seantiz/vulcan/internal/config"
+	"github.com/seantiz/vulcan/internal/engine"
 	"github.com/seantiz/vulcan/internal/store"
 )
 
@@ -24,7 +26,9 @@ func main() {
 	}
 	defer db.Close()
 
-	srv := api.NewServer(cfg.ListenAddr, db, logger)
+	reg := backend.NewRegistry()
+	eng := engine.NewEngine(db, reg, logger)
+	srv := api.NewServer(cfg.ListenAddr, db, reg, eng, logger)
 
 	if err := srv.Run(); err != nil {
 		log.Fatalf("server error: %v", err)

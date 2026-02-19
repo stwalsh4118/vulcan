@@ -8,6 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"context"
+
+	"github.com/seantiz/vulcan/internal/backend"
 	"github.com/seantiz/vulcan/internal/model"
 )
 
@@ -261,5 +264,76 @@ func TestDeleteWorkloadNotFound(t *testing.T) {
 
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+// stubBackend is a minimal Backend for endpoint tests.
+type stubBackend struct{}
+
+func (s *stubBackend) Execute(_ context.Context, _ backend.WorkloadSpec) (backend.WorkloadResult, error) {
+	return backend.WorkloadResult{}, nil
+}
+func (s *stubBackend) Capabilities() backend.BackendCapabilities {
+	return backend.BackendCapabilities{
+		Name:                "test-isolate",
+		SupportedRuntimes:   []string{model.RuntimeNode},
+		SupportedIsolations: []string{model.IsolationIsolate},
+		MaxConcurrency:      4,
+	}
+}
+func (s *stubBackend) Cleanup(_ context.Context, _ string) error { return nil }
+
+func TestListBackendsEndpoint(t *testing.T) {
+	srv := newTestServer(t)
+	srv.registry.Register(model.IsolationIsolate, &stubBackend{})
+
+	ts := httptest.NewServer(srv.Router())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/v1/backends")
+	if err != nil {
+		t.Fatalf("GET /v1/backends: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+
+	var backends []backend.BackendInfo
+	if err := json.NewDecoder(resp.Body).Decode(&backends); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(backends) != 1 {
+		t.Fatalf("expected 1 backend, got %d", len(backends))
+	}
+	if backends[0].Name != model.IsolationIsolate {
+		t.Errorf("backend name = %q, want %q", backends[0].Name, model.IsolationIsolate)
+	}
+}
+
+func TestListBackendsEmpty(t *testing.T) {
+	srv := newTestServer(t)
+	ts := httptest.NewServer(srv.Router())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/v1/backends")
+	if err != nil {
+		t.Fatalf("GET /v1/backends: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+
+	var backends []backend.BackendInfo
+	if err := json.NewDecoder(resp.Body).Decode(&backends); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(backends) != 0 {
+		t.Errorf("expected 0 backends, got %d", len(backends))
 	}
 }

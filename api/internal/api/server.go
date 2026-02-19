@@ -14,6 +14,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"github.com/seantiz/vulcan/internal/backend"
+	"github.com/seantiz/vulcan/internal/engine"
 	"github.com/seantiz/vulcan/internal/store"
 )
 
@@ -25,19 +27,23 @@ const (
 
 // Server wraps the chi router and application dependencies.
 type Server struct {
-	router *chi.Mux
-	store  store.Store
-	logger *slog.Logger
-	addr   string
+	router   *chi.Mux
+	store    store.Store
+	registry *backend.Registry
+	engine   *engine.Engine
+	logger   *slog.Logger
+	addr     string
 }
 
 // NewServer creates and configures a new HTTP server.
-func NewServer(addr string, s store.Store, logger *slog.Logger) *Server {
+func NewServer(addr string, s store.Store, reg *backend.Registry, eng *engine.Engine, logger *slog.Logger) *Server {
 	srv := &Server{
-		router: chi.NewRouter(),
-		store:  s,
-		logger: logger,
-		addr:   addr,
+		router:   chi.NewRouter(),
+		store:    s,
+		registry: reg,
+		engine:   eng,
+		logger:   logger,
+		addr:     addr,
 	}
 
 	srv.router.Use(middleware.RequestID)
@@ -63,10 +69,15 @@ func (s *Server) routes() {
 	s.router.Get("/healthz", s.handleHealthz)
 	s.router.Handle("/metrics", metricsHandler())
 
+	s.router.Get("/v1/backends", s.handleListBackends)
+	s.router.Get("/v1/stats", s.handleGetStats)
+
 	s.router.Route("/v1/workloads", func(r chi.Router) {
 		r.Post("/", s.handleCreateWorkload)
+		r.Post("/async", s.handleAsyncWorkload)
 		r.Get("/", s.handleListWorkloads)
 		r.Get("/{id}", s.handleGetWorkload)
+		r.Get("/{id}/logs", s.handleStreamLogs)
 		r.Delete("/{id}", s.handleDeleteWorkload)
 	})
 }

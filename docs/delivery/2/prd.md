@@ -56,4 +56,4 @@ N/A — backend/infrastructure PBI. Adds new API endpoints that the frontend (PB
 
 ## Related Tasks
 
-_Tasks will be created when this PBI moves to Agreed via `/plan-pbi 2`._
+[View Tasks](./tasks.md)

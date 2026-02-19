@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/seantiz/vulcan/internal/backend"
+	"github.com/seantiz/vulcan/internal/engine"
 	"github.com/seantiz/vulcan/internal/store"
 )
 
@@ -18,8 +20,10 @@ func newTestServer(t *testing.T) *Server {
 	}
 	t.Cleanup(func() { s.Close() })
 
+	reg := backend.NewRegistry()
+	eng := engine.NewEngine(s, reg, slog.New(slog.NewJSONHandler(io.Discard, nil)))
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	return NewServer(":0", s, logger)
+	return NewServer(":0", s, reg, eng, logger)
 }
 
 func TestRequestIDHeader(t *testing.T) {

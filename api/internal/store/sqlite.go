@@ -50,6 +50,11 @@ func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
+	// SQLite does not benefit from multiple connections — writes are always
+	// serialized. A single connection avoids "database is locked" errors and
+	// ensures in-memory databases are consistent across goroutines.
+	db.SetMaxOpenConns(1)
+
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("set WAL mode: %w", err)
@@ -157,19 +162,48 @@ func (s *SQLiteStore) ListWorkloads(ctx context.Context, limit, offset int) ([]*
 	return workloads, total, nil
 }
 
-// UpdateWorkloadStatus updates the status of a workload. For terminal statuses
-// (killed, completed, failed), it also sets finished_at.
+// UpdateWorkloadStatus updates the status of a workload after validating the
+// transition. For terminal statuses (killed, completed, failed), it also sets
+// finished_at. For running, it sets started_at. Returns ErrInvalidTransition
+// if the transition is not allowed, or ErrNotFound if the workload does not exist.
 func (s *SQLiteStore) UpdateWorkloadStatus(ctx context.Context, id, status string) error {
-	var result sql.Result
-	var err error
+	// SQLite serialises all writes via its file lock, so the read-then-update
+	// pattern here is safe from TOCTOU races. Other store implementations (e.g.
+	// Postgres) would need SELECT … FOR UPDATE or SERIALIZABLE isolation.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
 
-	if status == model.StatusKilled || status == model.StatusCompleted || status == model.StatusFailed {
-		result, err = s.db.ExecContext(ctx,
-			"UPDATE workloads SET status = ?, finished_at = ? WHERE id = ?",
-			status, time.Now().UTC(), id,
+	var current string
+	err = tx.QueryRowContext(ctx, "SELECT status FROM workloads WHERE id = ?", id).Scan(&current)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("read current status: %w", err)
+	}
+
+	if !model.ValidTransition(current, status) {
+		return fmt.Errorf("%w: cannot transition from %q to %q", ErrInvalidTransition, current, status)
+	}
+
+	now := time.Now().UTC()
+
+	switch {
+	case status == model.StatusRunning:
+		_, err = tx.ExecContext(ctx,
+			"UPDATE workloads SET status = ?, started_at = ? WHERE id = ?",
+			status, now, id,
 		)
-	} else {
-		result, err = s.db.ExecContext(ctx,
+	case status == model.StatusKilled || status == model.StatusCompleted || status == model.StatusFailed:
+		_, err = tx.ExecContext(ctx,
+			"UPDATE workloads SET status = ?, finished_at = ? WHERE id = ?",
+			status, now, id,
+		)
+	default:
+		_, err = tx.ExecContext(ctx,
 			"UPDATE workloads SET status = ? WHERE id = ?",
 			status, id,
 		)
@@ -179,13 +213,116 @@ func (s *SQLiteStore) UpdateWorkloadStatus(ctx context.Context, id, status strin
 		return fmt.Errorf("update workload status: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
+	return tx.Commit()
+}
+
+// UpdateWorkload updates the mutable fields of a workload: status, output,
+// exit_code, error, duration_ms, started_at, and finished_at. Immutable fields
+// (id, runtime, isolation, node_id, input_hash, cpu_limit, mem_limit, timeout_s,
+// created_at) are not modified. Validates the state transition if the status has
+// changed. Returns ErrNotFound if the workload does not exist, or
+// ErrInvalidTransition if the status change is not allowed.
+func (s *SQLiteStore) UpdateWorkload(ctx context.Context, w *model.Workload) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("check rows affected: %w", err)
+		return fmt.Errorf("begin tx: %w", err)
 	}
-	if rowsAffected == 0 {
+	defer tx.Rollback()
+
+	var current string
+	err = tx.QueryRowContext(ctx, "SELECT status FROM workloads WHERE id = ?", w.ID).Scan(&current)
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
+	if err != nil {
+		return fmt.Errorf("read current status: %w", err)
+	}
 
-	return nil
+	if current != w.Status && !model.ValidTransition(current, w.Status) {
+		return fmt.Errorf("%w: cannot transition from %q to %q", ErrInvalidTransition, current, w.Status)
+	}
+
+	_, err = tx.ExecContext(ctx,
+		`UPDATE workloads SET
+			status = ?, output = ?, exit_code = ?, error = ?,
+			duration_ms = ?, started_at = ?, finished_at = ?
+		WHERE id = ?`,
+		w.Status, w.Output, w.ExitCode, w.Error,
+		w.DurationMS, w.StartedAt, w.FinishedAt, w.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("update workload: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+// GetWorkloadStats returns aggregate execution statistics across all workloads.
+// All queries run within a read-only transaction for a consistent snapshot.
+func (s *SQLiteStore) GetWorkloadStats(ctx context.Context) (*WorkloadStats, error) {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, fmt.Errorf("begin read tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	stats := &WorkloadStats{
+		CountByStatus:    make(map[string]int),
+		CountByIsolation: make(map[string]int),
+	}
+
+	// Count by status.
+	rows, err := tx.QueryContext(ctx, "SELECT status, COUNT(*) FROM workloads GROUP BY status")
+	if err != nil {
+		return nil, fmt.Errorf("count by status: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, fmt.Errorf("scan status count: %w", err)
+		}
+		stats.CountByStatus[status] = count
+		stats.Total += count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate status counts: %w", err)
+	}
+
+	// Count by isolation.
+	rows2, err := tx.QueryContext(ctx,
+		"SELECT isolation, COUNT(*) FROM workloads WHERE isolation != '' GROUP BY isolation")
+	if err != nil {
+		return nil, fmt.Errorf("count by isolation: %w", err)
+	}
+	defer rows2.Close()
+
+	for rows2.Next() {
+		var isolation string
+		var count int
+		if err := rows2.Scan(&isolation, &count); err != nil {
+			return nil, fmt.Errorf("scan isolation count: %w", err)
+		}
+		stats.CountByIsolation[isolation] = count
+	}
+	if err := rows2.Err(); err != nil {
+		return nil, fmt.Errorf("iterate isolation counts: %w", err)
+	}
+
+	// Average duration of completed workloads.
+	var avgDuration sql.NullFloat64
+	err = tx.QueryRowContext(ctx,
+		"SELECT AVG(duration_ms) FROM workloads WHERE status = ? AND duration_ms IS NOT NULL",
+		model.StatusCompleted,
+	).Scan(&avgDuration)
+	if err != nil {
+		return nil, fmt.Errorf("avg duration: %w", err)
+	}
+	if avgDuration.Valid {
+		stats.AvgDurationMS = avgDuration.Float64
+	}
+
+	return stats, nil
 }
