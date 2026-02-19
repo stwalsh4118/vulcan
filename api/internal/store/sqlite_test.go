@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -205,9 +206,255 @@ func TestUpdateWorkloadStatusNotFound(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
-	err := s.UpdateWorkloadStatus(ctx, "nonexistent", model.StatusKilled)
+	err := s.UpdateWorkloadStatus(ctx, "nonexistent", model.StatusRunning)
 	if err != ErrNotFound {
 		t.Errorf("UpdateWorkloadStatus error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestUpdateWorkloadStatusValidLifecycle(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	w := makeTestWorkload()
+
+	if err := s.CreateWorkload(ctx, w); err != nil {
+		t.Fatalf("CreateWorkload: %v", err)
+	}
+
+	// pending → running
+	if err := s.UpdateWorkloadStatus(ctx, w.ID, model.StatusRunning); err != nil {
+		t.Fatalf("pending→running: %v", err)
+	}
+	got, _ := s.GetWorkload(ctx, w.ID)
+	if got.Status != model.StatusRunning {
+		t.Errorf("Status = %q, want %q", got.Status, model.StatusRunning)
+	}
+	if got.StartedAt == nil {
+		t.Error("StartedAt is nil, expected it to be set for running status")
+	}
+
+	// running → completed
+	if err := s.UpdateWorkloadStatus(ctx, w.ID, model.StatusCompleted); err != nil {
+		t.Fatalf("running→completed: %v", err)
+	}
+	got, _ = s.GetWorkload(ctx, w.ID)
+	if got.Status != model.StatusCompleted {
+		t.Errorf("Status = %q, want %q", got.Status, model.StatusCompleted)
+	}
+	if got.FinishedAt == nil {
+		t.Error("FinishedAt is nil, expected it to be set for completed status")
+	}
+}
+
+func TestUpdateWorkloadStatusInvalidTransition(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	tests := []struct {
+		name     string
+		from, to string
+	}{
+		{"pending→completed", model.StatusPending, model.StatusCompleted},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := makeTestWorkload()
+			w.Status = tc.from
+			if err := s.CreateWorkload(ctx, w); err != nil {
+				t.Fatalf("CreateWorkload: %v", err)
+			}
+
+			err := s.UpdateWorkloadStatus(ctx, w.ID, tc.to)
+			if !errors.Is(err, ErrInvalidTransition) {
+				t.Errorf("got error %v, want ErrInvalidTransition", err)
+			}
+		})
+	}
+}
+
+func TestUpdateWorkloadStatusTerminalCannotTransition(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	w := makeTestWorkload()
+
+	if err := s.CreateWorkload(ctx, w); err != nil {
+		t.Fatalf("CreateWorkload: %v", err)
+	}
+
+	// Move to running, then completed (terminal).
+	if err := s.UpdateWorkloadStatus(ctx, w.ID, model.StatusRunning); err != nil {
+		t.Fatalf("pending→running: %v", err)
+	}
+	if err := s.UpdateWorkloadStatus(ctx, w.ID, model.StatusCompleted); err != nil {
+		t.Fatalf("running→completed: %v", err)
+	}
+
+	// completed → killed should fail
+	err := s.UpdateWorkloadStatus(ctx, w.ID, model.StatusKilled)
+	if !errors.Is(err, ErrInvalidTransition) {
+		t.Errorf("completed→killed: got error %v, want ErrInvalidTransition", err)
+	}
+}
+
+func TestUpdateWorkload(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	w := makeTestWorkload()
+
+	if err := s.CreateWorkload(ctx, w); err != nil {
+		t.Fatalf("CreateWorkload: %v", err)
+	}
+
+	// Transition to running, then update all mutable fields.
+	now := time.Now().UTC()
+	exitCode := 0
+	durationMS := 150
+	w.Status = model.StatusRunning
+	w.StartedAt = &now
+	if err := s.UpdateWorkload(ctx, w); err != nil {
+		t.Fatalf("UpdateWorkload (running): %v", err)
+	}
+
+	w.Status = model.StatusCompleted
+	w.Output = []byte("hello world")
+	w.ExitCode = &exitCode
+	w.Error = ""
+	w.DurationMS = &durationMS
+	finishedAt := now.Add(time.Duration(durationMS) * time.Millisecond)
+	w.FinishedAt = &finishedAt
+
+	if err := s.UpdateWorkload(ctx, w); err != nil {
+		t.Fatalf("UpdateWorkload (completed): %v", err)
+	}
+
+	got, err := s.GetWorkload(ctx, w.ID)
+	if err != nil {
+		t.Fatalf("GetWorkload: %v", err)
+	}
+	if got.Status != model.StatusCompleted {
+		t.Errorf("Status = %q, want %q", got.Status, model.StatusCompleted)
+	}
+	if string(got.Output) != "hello world" {
+		t.Errorf("Output = %q, want %q", string(got.Output), "hello world")
+	}
+	if *got.ExitCode != 0 {
+		t.Errorf("ExitCode = %d, want 0", *got.ExitCode)
+	}
+	if *got.DurationMS != 150 {
+		t.Errorf("DurationMS = %d, want 150", *got.DurationMS)
+	}
+	if got.FinishedAt == nil {
+		t.Error("FinishedAt is nil")
+	}
+}
+
+func TestUpdateWorkloadNotFound(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	w := makeTestWorkload()
+	w.ID = "nonexistent"
+	err := s.UpdateWorkload(ctx, w)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("got error %v, want ErrNotFound", err)
+	}
+}
+
+func TestUpdateWorkloadInvalidTransition(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	w := makeTestWorkload()
+
+	if err := s.CreateWorkload(ctx, w); err != nil {
+		t.Fatalf("CreateWorkload: %v", err)
+	}
+
+	// pending → completed is invalid
+	w.Status = model.StatusCompleted
+	err := s.UpdateWorkload(ctx, w)
+	if !errors.Is(err, ErrInvalidTransition) {
+		t.Errorf("got error %v, want ErrInvalidTransition", err)
+	}
+}
+
+func TestGetWorkloadStats(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	// Create workloads in various states.
+	for i := 0; i < 3; i++ {
+		w := makeTestWorkload()
+		w.Isolation = model.IsolationIsolate
+		if err := s.CreateWorkload(ctx, w); err != nil {
+			t.Fatalf("CreateWorkload: %v", err)
+		}
+		// Move first two to completed with a duration.
+		if i < 2 {
+			if err := s.UpdateWorkloadStatus(ctx, w.ID, model.StatusRunning); err != nil {
+				t.Fatalf("UpdateWorkloadStatus running: %v", err)
+			}
+			if err := s.UpdateWorkloadStatus(ctx, w.ID, model.StatusCompleted); err != nil {
+				t.Fatalf("UpdateWorkloadStatus completed: %v", err)
+			}
+			dur := 100 + i*100 // 100, 200
+			now := time.Now().UTC()
+			w.Status = model.StatusCompleted
+			w.DurationMS = &dur
+			w.FinishedAt = &now
+			w.StartedAt = &now
+			if _, err := s.db.ExecContext(ctx,
+				"UPDATE workloads SET duration_ms = ? WHERE id = ?", dur, w.ID); err != nil {
+				t.Fatalf("set duration: %v", err)
+			}
+		}
+	}
+
+	// Add a microvm workload.
+	w := makeTestWorkload()
+	w.Isolation = model.IsolationMicroVM
+	if err := s.CreateWorkload(ctx, w); err != nil {
+		t.Fatalf("CreateWorkload (microvm): %v", err)
+	}
+
+	stats, err := s.GetWorkloadStats(ctx)
+	if err != nil {
+		t.Fatalf("GetWorkloadStats: %v", err)
+	}
+
+	if stats.Total != 4 {
+		t.Errorf("Total = %d, want 4", stats.Total)
+	}
+	if stats.CountByStatus[model.StatusCompleted] != 2 {
+		t.Errorf("completed count = %d, want 2", stats.CountByStatus[model.StatusCompleted])
+	}
+	if stats.CountByStatus[model.StatusPending] != 2 {
+		t.Errorf("pending count = %d, want 2", stats.CountByStatus[model.StatusPending])
+	}
+	if stats.CountByIsolation[model.IsolationIsolate] != 3 {
+		t.Errorf("isolate count = %d, want 3", stats.CountByIsolation[model.IsolationIsolate])
+	}
+	if stats.CountByIsolation[model.IsolationMicroVM] != 1 {
+		t.Errorf("microvm count = %d, want 1", stats.CountByIsolation[model.IsolationMicroVM])
+	}
+	if stats.AvgDurationMS != 150 {
+		t.Errorf("AvgDurationMS = %f, want 150", stats.AvgDurationMS)
+	}
+}
+
+func TestGetWorkloadStatsEmpty(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	stats, err := s.GetWorkloadStats(ctx)
+	if err != nil {
+		t.Fatalf("GetWorkloadStats: %v", err)
+	}
+	if stats.Total != 0 {
+		t.Errorf("Total = %d, want 0", stats.Total)
+	}
+	if stats.AvgDurationMS != 0 {
+		t.Errorf("AvgDurationMS = %f, want 0", stats.AvgDurationMS)
 	}
 }
 
