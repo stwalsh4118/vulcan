@@ -34,7 +34,7 @@ type Workload struct {
     Runtime    string     `json:"runtime"`
     NodeID     string     `json:"node_id"`
     InputHash  string     `json:"input_hash"`
-    Output     string     `json:"output"`
+    Output     []byte     `json:"output"`
     ExitCode   *int       `json:"exit_code"`
     Error      string     `json:"error"`
     CPULimit   *int       `json:"cpu_limit"`
@@ -54,8 +54,111 @@ func NewID() string // Returns 26-char ULID
 | Category | Values |
 |----------|--------|
 | Status | `pending`, `running`, `completed`, `failed`, `killed` |
-| Isolation | `microvm`, `isolate`, `gvisor` |
+| Isolation | `microvm`, `isolate`, `gvisor`, `auto` |
 | Runtime | `go`, `node`, `python`, `wasm`, `oci` |
+
+### State Transitions
+
+```go
+// internal/model/workload.go
+func ValidTransition(from, to string) bool
+
+// Allowed transitions:
+// pending  → running, failed, killed
+// running  → completed, failed, killed
+// All others are invalid.
+```
+
+## Backend Interface
+
+```go
+// internal/backend/backend.go
+type Backend interface {
+    Execute(ctx context.Context, spec WorkloadSpec) (WorkloadResult, error)
+    Capabilities() BackendCapabilities
+    Cleanup(ctx context.Context, workloadID string) error
+}
+
+type WorkloadSpec struct {
+    ID         string
+    Runtime    string
+    Isolation  string
+    Code       string
+    Input      []byte
+    CPULimit   int
+    MemLimitMB int
+    TimeoutS   int
+    LogWriter  func(line string) `json:"-"` // optional log callback
+}
+
+type WorkloadResult struct {
+    ExitCode   int
+    Output     []byte
+    Error      string
+    DurationMS int
+    LogLines   []string
+}
+
+type BackendCapabilities struct {
+    Name                string
+    SupportedRuntimes   []string
+    SupportedIsolations []string
+    MaxConcurrency      int
+}
+```
+
+## Backend Registry
+
+```go
+// internal/backend/registry.go
+type Registry struct { /* ... */ }
+
+func NewRegistry() *Registry
+func (r *Registry) Register(isolation string, b Backend)
+func (r *Registry) Resolve(isolation, runtime string) (Backend, error)
+func (r *Registry) List() []BackendInfo
+
+type BackendInfo struct {
+    Name         string              `json:"name"`
+    Capabilities BackendCapabilities `json:"capabilities"`
+}
+```
+
+### Auto-Routing Rules
+
+| Runtime | Resolved Isolation |
+|---------|--------------------|
+| `node`  | `isolate` |
+| `wasm`  | `isolate` |
+| `python`| `microvm` |
+| `go`    | `microvm` |
+| `oci`   | `gvisor` |
+
+## Execution Engine
+
+```go
+// internal/engine/engine.go
+const DefaultTimeoutS = 30
+
+type Engine struct { /* store, registry, logger, wg, broker */ }
+
+func NewEngine(s store.Store, reg *backend.Registry, logger *slog.Logger) *Engine
+func (e *Engine) Submit(ctx context.Context, w *model.Workload) error
+func (e *Engine) Wait()
+func (e *Engine) Broker() *LogBroker
+```
+
+## Log Broker
+
+```go
+// internal/engine/logbroker.go
+type LogBroker struct { /* ... */ }
+
+func NewLogBroker() *LogBroker
+func (b *LogBroker) Subscribe(workloadID string) (<-chan string, func())
+func (b *LogBroker) Publish(workloadID string, line string)
+func (b *LogBroker) Close(workloadID string)
+```
 
 ## Store Interface
 
@@ -66,10 +169,20 @@ type Store interface {
     GetWorkload(ctx context.Context, id string) (*model.Workload, error)
     ListWorkloads(ctx context.Context, limit, offset int) ([]*model.Workload, int, error)
     UpdateWorkloadStatus(ctx context.Context, id, status string) error
+    UpdateWorkload(ctx context.Context, w *model.Workload) error
+    GetWorkloadStats(ctx context.Context) (*WorkloadStats, error)
     Close() error
 }
 
+type WorkloadStats struct {
+    Total            int            `json:"total"`
+    CountByStatus    map[string]int `json:"count_by_status"`
+    CountByIsolation map[string]int `json:"count_by_isolation"`
+    AvgDurationMS    float64        `json:"avg_duration_ms"`
+}
+
 var ErrNotFound = errors.New("not found")
+var ErrInvalidTransition = errors.New("invalid status transition")
 ```
 
 SQLite implementation: `NewSQLiteStore(dbPath string) (*SQLiteStore, error)`
@@ -109,9 +222,22 @@ Registered metrics:
 
 **Errors:** `400` — missing runtime or invalid JSON.
 
+### POST /v1/workloads/async
+
+**Request:** Same body as `POST /v1/workloads`.
+
+- `isolation` defaults to `auto` if omitted.
+- Default timeout: 30s if not specified.
+
+**Response:** `202 Accepted` — full Workload object with `status: "pending"`.
+
+Execution happens asynchronously in a goroutine. Poll `GET /v1/workloads/:id` for status.
+
+**Errors:** `400` — missing runtime or invalid JSON. `500` — engine submission failure.
+
 ### GET /v1/workloads/:id
 
-**Response:** `200 OK` — full Workload object.
+**Response:** `200 OK` — full Workload object (reflects real-time status during execution).
 
 **Errors:** `404` — workload not found.
 
@@ -135,7 +261,50 @@ Sets status to `killed`, sets `finished_at`.
 
 **Response:** `200 OK` — updated Workload object.
 
+**Errors:** `404` — workload not found. `409` — workload cannot be killed in its current state.
+
+### GET /v1/workloads/:id/logs
+
+Server-Sent Events stream of log lines from a running workload.
+
+**Headers:** `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`
+
+**Events:** Each log line sent as `data: <line>\n\n`. Multi-line data is split per SSE spec.
+
+**Behavior:**
+- If workload is in a terminal state, returns 200 with empty stream (closes immediately).
+- Stream closes when workload finishes or client disconnects.
+
 **Errors:** `404` — workload not found.
+
+### GET /v1/backends
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "name": "isolate",
+    "capabilities": {
+      "name": "v8-isolate",
+      "supported_runtimes": ["node", "wasm"],
+      "supported_isolations": ["isolate"],
+      "max_concurrency": 10
+    }
+  }
+]
+```
+
+### GET /v1/stats
+
+**Response:** `200 OK`
+```json
+{
+  "total": 42,
+  "by_status": {"pending": 2, "running": 1, "completed": 35, "failed": 4},
+  "by_isolation": {"microvm": 15, "isolate": 20, "gvisor": 7},
+  "avg_duration_ms": 1250.5
+}
+```
 
 ### Error Format
 
@@ -148,10 +317,10 @@ All errors return:
 
 ```go
 // internal/api/server.go
-func NewServer(addr string, store store.Store, logger *slog.Logger) *Server
+func NewServer(addr string, s store.Store, reg *backend.Registry, eng *engine.Engine, logger *slog.Logger) *Server
 func (s *Server) Run() error // blocks until SIGINT/SIGTERM, graceful shutdown
 ```
 
 Middleware stack: RequestID, Recoverer, Logging, Metrics, CORS.
 
-HTTP server timeouts: `ReadHeaderTimeout: 10s`, `WriteTimeout: 30s`.
+HTTP server timeouts: `ReadHeaderTimeout: 10s`, `WriteTimeout: 30s` (disabled for SSE endpoints).
