@@ -11,3 +11,7 @@ api/vulcan
 api/test.db
 api/test.db-shm
 api/test.db-wal
+
+# Next.js
+web/.next/
+web/node_modules/

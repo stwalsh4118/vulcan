@@ -64,4 +64,4 @@ The API exists (PBI-1) and will soon support execution (PBI-2), but there's no v
 
 ## Related Tasks
 
-_Tasks will be created when this PBI moves to Agreed via `/plan-pbi 3`._
+[View Tasks](./tasks.md)
