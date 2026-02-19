@@ -1,6 +1,7 @@
 import type {
   ApiError,
   CreateWorkloadRequest,
+  LogHistoryResponse,
   Workload,
   WorkloadListResponse,
   WorkloadStats,
@@ -75,6 +76,10 @@ export async function getStats(): Promise<WorkloadStats> {
 
 export async function getBackends(): Promise<BackendInfo[]> {
   return request<BackendInfo[]>("/backends");
+}
+
+export async function getLogHistory(id: string): Promise<LogHistoryResponse> {
+  return request<LogHistoryResponse>(`/workloads/${id}/logs/history`);
 }
 
 export { ApiClientError };

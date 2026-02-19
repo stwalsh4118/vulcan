@@ -78,6 +78,7 @@ func (s *Server) routes() {
 		r.Get("/", s.handleListWorkloads)
 		r.Get("/{id}", s.handleGetWorkload)
 		r.Get("/{id}/logs", s.handleStreamLogs)
+		r.Get("/{id}/logs/history", s.handleGetLogHistory)
 		r.Delete("/{id}", s.handleDeleteWorkload)
 	})
 }

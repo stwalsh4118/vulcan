@@ -26,5 +26,7 @@ type Store interface {
 	UpdateWorkloadStatus(ctx context.Context, id, status string) error
 	UpdateWorkload(ctx context.Context, w *model.Workload) error
 	GetWorkloadStats(ctx context.Context) (*WorkloadStats, error)
+	InsertLogLine(ctx context.Context, workloadID string, seq int, line string) error
+	GetLogLines(ctx context.Context, workloadID string) ([]model.LogLine, error)
 	Close() error
 }

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -455,6 +456,139 @@ func TestGetWorkloadStatsEmpty(t *testing.T) {
 	}
 	if stats.AvgDurationMS != 0 {
 		t.Errorf("AvgDurationMS = %f, want 0", stats.AvgDurationMS)
+	}
+}
+
+func TestInsertAndGetLogLines(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	w := makeTestWorkload()
+	if err := s.CreateWorkload(ctx, w); err != nil {
+		t.Fatalf("CreateWorkload: %v", err)
+	}
+
+	// Insert three log lines.
+	for i := 0; i < 3; i++ {
+		if err := s.InsertLogLine(ctx, w.ID, i, fmt.Sprintf("line %d", i)); err != nil {
+			t.Fatalf("InsertLogLine[%d]: %v", i, err)
+		}
+	}
+
+	lines, err := s.GetLogLines(ctx, w.ID)
+	if err != nil {
+		t.Fatalf("GetLogLines: %v", err)
+	}
+	if len(lines) != 3 {
+		t.Fatalf("len(lines) = %d, want 3", len(lines))
+	}
+
+	for i, l := range lines {
+		if l.Seq != i {
+			t.Errorf("lines[%d].Seq = %d, want %d", i, l.Seq, i)
+		}
+		want := fmt.Sprintf("line %d", i)
+		if l.Line != want {
+			t.Errorf("lines[%d].Line = %q, want %q", i, l.Line, want)
+		}
+		if l.WorkloadID != w.ID {
+			t.Errorf("lines[%d].WorkloadID = %q, want %q", i, l.WorkloadID, w.ID)
+		}
+		if l.ID == 0 {
+			t.Errorf("lines[%d].ID = 0, expected non-zero auto-increment ID", i)
+		}
+	}
+}
+
+func TestGetLogLinesOrdering(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	w := makeTestWorkload()
+	if err := s.CreateWorkload(ctx, w); err != nil {
+		t.Fatalf("CreateWorkload: %v", err)
+	}
+
+	// Insert lines out of order.
+	for _, seq := range []int{2, 0, 1} {
+		if err := s.InsertLogLine(ctx, w.ID, seq, fmt.Sprintf("line %d", seq)); err != nil {
+			t.Fatalf("InsertLogLine[%d]: %v", seq, err)
+		}
+	}
+
+	lines, err := s.GetLogLines(ctx, w.ID)
+	if err != nil {
+		t.Fatalf("GetLogLines: %v", err)
+	}
+
+	// Should be ordered by seq ASC regardless of insertion order.
+	for i := 0; i < len(lines)-1; i++ {
+		if lines[i].Seq >= lines[i+1].Seq {
+			t.Errorf("lines not ordered by seq: lines[%d].Seq=%d >= lines[%d].Seq=%d",
+				i, lines[i].Seq, i+1, lines[i+1].Seq)
+		}
+	}
+}
+
+func TestGetLogLinesEmpty(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	w := makeTestWorkload()
+	if err := s.CreateWorkload(ctx, w); err != nil {
+		t.Fatalf("CreateWorkload: %v", err)
+	}
+
+	lines, err := s.GetLogLines(ctx, w.ID)
+	if err != nil {
+		t.Fatalf("GetLogLines: %v", err)
+	}
+	if len(lines) != 0 {
+		t.Errorf("len(lines) = %d, want 0", len(lines))
+	}
+	if lines == nil {
+		t.Error("lines is nil, expected empty slice")
+	}
+}
+
+func TestGetLogLinesIsolation(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	w1 := makeTestWorkload()
+	w2 := makeTestWorkload()
+	if err := s.CreateWorkload(ctx, w1); err != nil {
+		t.Fatalf("CreateWorkload w1: %v", err)
+	}
+	if err := s.CreateWorkload(ctx, w2); err != nil {
+		t.Fatalf("CreateWorkload w2: %v", err)
+	}
+
+	// Insert lines for both workloads.
+	if err := s.InsertLogLine(ctx, w1.ID, 0, "w1 line"); err != nil {
+		t.Fatalf("InsertLogLine w1: %v", err)
+	}
+	if err := s.InsertLogLine(ctx, w2.ID, 0, "w2 line"); err != nil {
+		t.Fatalf("InsertLogLine w2: %v", err)
+	}
+
+	lines1, err := s.GetLogLines(ctx, w1.ID)
+	if err != nil {
+		t.Fatalf("GetLogLines w1: %v", err)
+	}
+	if len(lines1) != 1 {
+		t.Fatalf("w1 len(lines) = %d, want 1", len(lines1))
+	}
+	if lines1[0].Line != "w1 line" {
+		t.Errorf("w1 line = %q, want %q", lines1[0].Line, "w1 line")
+	}
+
+	lines2, err := s.GetLogLines(ctx, w2.ID)
+	if err != nil {
+		t.Fatalf("GetLogLines w2: %v", err)
+	}
+	if len(lines2) != 1 {
+		t.Fatalf("w2 len(lines) = %d, want 1", len(lines2))
+	}
+	if lines2[0].Line != "w2 line" {
+		t.Errorf("w2 line = %q, want %q", lines2[0].Line, "w2 line")
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/seantiz/vulcan/internal/backend"
@@ -86,13 +87,21 @@ func (e *Engine) execute(w *model.Workload) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutS)*time.Second)
 	defer cancel()
 
-	// Build the workload spec.
+	// Build the workload spec. The LogWriter dual-writes: persist to SQLite
+	// for historical viewing, then publish to LogBroker for real-time SSE.
+	var seq atomic.Int32
 	spec := backend.WorkloadSpec{
 		ID:        w.ID,
 		Runtime:   w.Runtime,
 		Isolation: w.Isolation,
 		TimeoutS:  timeoutS,
-		LogWriter: func(line string) { e.broker.Publish(w.ID, line) },
+		LogWriter: func(line string) {
+			currentSeq := int(seq.Add(1) - 1)
+			if err := e.store.InsertLogLine(ctx, w.ID, currentSeq, line); err != nil {
+				e.logger.Error("failed to persist log line", "workload_id", w.ID, "seq", currentSeq, "error", err)
+			}
+			e.broker.Publish(w.ID, line)
+		},
 	}
 	if w.CPULimit != nil {
 		spec.CPULimit = *w.CPULimit

@@ -85,6 +85,17 @@ export interface WorkloadListResponse {
   offset: number;
 }
 
+export interface LogHistoryLine {
+  seq: number;
+  line: string;
+  created_at: string;
+}
+
+export interface LogHistoryResponse {
+  workload_id: string;
+  lines: LogHistoryLine[];
+}
+
 export interface ApiError {
   error: string;
 }

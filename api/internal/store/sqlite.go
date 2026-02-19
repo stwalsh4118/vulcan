@@ -32,6 +32,17 @@ CREATE TABLE IF NOT EXISTS workloads (
     finished_at DATETIME
 )`
 
+const createLogLinesTable = `
+CREATE TABLE IF NOT EXISTS log_lines (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    workload_id TEXT NOT NULL REFERENCES workloads(id),
+    seq         INTEGER NOT NULL,
+    line        TEXT NOT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+)`
+
+const createLogLinesIndex = `CREATE INDEX IF NOT EXISTS idx_log_lines_workload ON log_lines(workload_id, seq)`
+
 // ErrNotFound is returned when a workload is not found.
 var ErrNotFound = errors.New("workload not found")
 
@@ -68,6 +79,16 @@ func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
 	if _, err := db.Exec(createWorkloadsTable); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create workloads table: %w", err)
+	}
+
+	if _, err := db.Exec(createLogLinesTable); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create log_lines table: %w", err)
+	}
+
+	if _, err := db.Exec(createLogLinesIndex); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create log_lines index: %w", err)
 	}
 
 	return &SQLiteStore{db: db}, nil
@@ -255,6 +276,47 @@ func (s *SQLiteStore) UpdateWorkload(ctx context.Context, w *model.Workload) err
 	}
 
 	return tx.Commit()
+}
+
+// InsertLogLine persists a single log line for a workload.
+func (s *SQLiteStore) InsertLogLine(ctx context.Context, workloadID string, seq int, line string) error {
+	_, err := s.db.ExecContext(ctx,
+		"INSERT INTO log_lines (workload_id, seq, line) VALUES (?, ?, ?)",
+		workloadID, seq, line,
+	)
+	if err != nil {
+		return fmt.Errorf("insert log line: %w", err)
+	}
+	return nil
+}
+
+// GetLogLines retrieves all log lines for a workload ordered by sequence number.
+func (s *SQLiteStore) GetLogLines(ctx context.Context, workloadID string) ([]model.LogLine, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT id, workload_id, seq, line, created_at FROM log_lines WHERE workload_id = ? ORDER BY seq ASC",
+		workloadID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query log lines: %w", err)
+	}
+	defer rows.Close()
+
+	var lines []model.LogLine
+	for rows.Next() {
+		var l model.LogLine
+		if err := rows.Scan(&l.ID, &l.WorkloadID, &l.Seq, &l.Line, &l.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan log line: %w", err)
+		}
+		lines = append(lines, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate log lines: %w", err)
+	}
+
+	if lines == nil {
+		lines = []model.LogLine{}
+	}
+	return lines, nil
 }
 
 // GetWorkloadStats returns aggregate execution statistics across all workloads.

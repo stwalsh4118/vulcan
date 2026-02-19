@@ -8,6 +8,7 @@ const STATE_LABELS: Record<LogStreamState, string> = {
   connected: "Streaming",
   closed: "Disconnected",
   error: "Connection failed",
+  historical: "Complete",
 };
 
 export function LogViewer({
@@ -33,6 +34,11 @@ export function LogViewer({
     }
   }
 
+  const statusLabel =
+    streamState === "historical"
+      ? `Complete — ${lines.length} log line${lines.length !== 1 ? "s" : ""}`
+      : STATE_LABELS[streamState];
+
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
@@ -45,12 +51,12 @@ export function LogViewer({
                   ? "bg-yellow-400 animate-pulse"
                   : streamState === "error"
                     ? "bg-red-400"
-                    : "bg-zinc-500"
+                    : streamState === "historical"
+                      ? "bg-blue-400"
+                      : "bg-zinc-500"
             }`}
           />
-          <span className="text-xs text-muted-foreground">
-            {STATE_LABELS[streamState]}
-          </span>
+          <span className="text-xs text-muted-foreground">{statusLabel}</span>
         </div>
         {streamState === "connected" && (
           <button
@@ -67,7 +73,7 @@ export function LogViewer({
       >
         {lines.length === 0 ? (
           <span className="text-muted-foreground">
-            {streamState === "closed"
+            {streamState === "closed" || streamState === "historical"
               ? "No logs available."
               : "Waiting for logs..."}
           </span>

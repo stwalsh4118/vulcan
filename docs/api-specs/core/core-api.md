@@ -171,6 +171,8 @@ type Store interface {
     UpdateWorkloadStatus(ctx context.Context, id, status string) error
     UpdateWorkload(ctx context.Context, w *model.Workload) error
     GetWorkloadStats(ctx context.Context) (*WorkloadStats, error)
+    InsertLogLine(ctx context.Context, workloadID string, seq int, line string) error
+    GetLogLines(ctx context.Context, workloadID string) ([]model.LogLine, error)
     Close() error
 }
 
@@ -274,6 +276,26 @@ Server-Sent Events stream of log lines from a running workload.
 **Behavior:**
 - If workload is in a terminal state, returns 200 with empty stream (closes immediately).
 - Stream closes when workload finishes or client disconnects.
+
+**Errors:** `404` — workload not found.
+
+### GET /v1/workloads/:id/logs/history
+
+Returns all persisted log lines for a workload as a JSON array.
+
+**Response:** `200 OK`
+```json
+{
+  "workload_id": "01ABCDEF...",
+  "lines": [
+    {"seq": 0, "line": "Starting execution...", "created_at": "2026-02-19T07:00:00Z"},
+    {"seq": 1, "line": "Done.", "created_at": "2026-02-19T07:00:01Z"}
+  ]
+}
+```
+
+- `lines` is always an array (empty `[]` if no log lines exist, never `null`).
+- Log lines are ordered by `seq` ascending.
 
 **Errors:** `404` — workload not found.
 
