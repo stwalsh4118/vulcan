@@ -8,15 +8,15 @@ This document lists all tasks associated with PBI 4.
 
 | Task ID | Name | Status | Description |
 | :------ | :--- | :----- | :---------- |
-| 4-1 | [Firecracker Configuration, Types & Protocol](./4-1.md) | Proposed | Define config structs, environment variables, vsock protocol types, and named constants for the Firecracker backend |
-| 4-2 | [Guest Agent Binary](./4-2.md) | Proposed | Build the vulcan-guest static Go binary that runs inside microVMs — listens on vsock, receives code, executes, returns results |
-| 4-3 | [Kernel & Rootfs Build Tooling](./4-3.md) | Proposed | Download scripts for Firecracker binary + kernel, Makefile targets for building Alpine-based ext4 rootfs images with Go/Node/Python runtimes |
-| 4-4 | [vsock Host-Side Communication](./4-4.md) | Proposed | Host-side vsock client that connects to guest agent, sends workload specs, receives results, and streams log lines |
-| 4-5 | [CNI Networking Setup](./4-5.md) | Proposed | CNI configuration with bridge + tc-redirect-tap for TAP device creation, IP allocation, and outbound NAT per microVM |
-| 4-6 | [Firecracker Backend Core Implementation](./4-6.md) | Proposed | Implement the Backend interface using firecracker-go-sdk — VM lifecycle, registry integration, resource limits, concurrent VM management |
-| 4-7 | [Firecracker Prometheus Metrics](./4-7.md) | Proposed | Register and instrument Firecracker-specific Prometheus metrics (boot time, active VMs, vsock latency, cleanup duration) |
-| 4-8 | [Frontend microVM Enhancements](./4-8.md) | Proposed | Add archive upload support for microVM workloads, show isolation-specific metadata in workload detail view |
-| 4-9 | [E2E CoS Test](./4-9.md) | Proposed | End-to-end tests verifying all PBI 4 acceptance criteria across Go, Node, and Python workloads in Firecracker microVMs |
+| 4-1 | [Firecracker Configuration, Types & Protocol](./4-1.md) | Done | Define config structs, environment variables, vsock protocol types, and named constants for the Firecracker backend |
+| 4-2 | [Guest Agent Binary](./4-2.md) | Done | Build the vulcan-guest static Go binary that runs inside microVMs — listens on vsock, receives code, executes, returns results |
+| 4-3 | [Kernel & Rootfs Build Tooling](./4-3.md) | Done | Download scripts for Firecracker binary + kernel, Makefile targets for building Alpine-based ext4 rootfs images with Go/Node/Python runtimes |
+| 4-4 | [vsock Host-Side Communication](./4-4.md) | Done | Host-side vsock client that connects to guest agent, sends workload specs, receives results, and streams log lines |
+| 4-5 | [CNI Networking Setup](./4-5.md) | Done | CNI configuration with bridge + tc-redirect-tap for TAP device creation, IP allocation, and outbound NAT per microVM |
+| 4-6 | [Firecracker Backend Core Implementation](./4-6.md) | Done | Implement the Backend interface using firecracker-go-sdk — VM lifecycle, registry integration, resource limits, concurrent VM management |
+| 4-7 | [Firecracker Prometheus Metrics](./4-7.md) | Done | Register and instrument Firecracker-specific Prometheus metrics (boot time, active VMs, vsock latency, cleanup duration) |
+| 4-8 | [Frontend microVM Enhancements](./4-8.md) | Done | Add archive upload support for microVM workloads, show isolation-specific metadata in workload detail view |
+| 4-9 | [E2E CoS Test](./4-9.md) | Done | End-to-end tests verifying all PBI 4 acceptance criteria across Go, Node, and Python workloads in Firecracker microVMs |
 
 ## Dependency Graph
 
