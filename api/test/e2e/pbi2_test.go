@@ -23,14 +23,15 @@ import (
 
 // stubBackend is a configurable mock backend for E2E tests.
 type stubBackend struct {
-	name      string
-	runtimes  []string
-	isolation string
-	delay     time.Duration
-	output    []byte
-	logLines  []string
-	err       error
-	calls     atomic.Int64
+	name         string
+	runtimes     []string
+	isolation    string
+	delay        time.Duration
+	logLineDelay time.Duration // delay between each log line emission
+	output       []byte
+	logLines     []string
+	err          error
+	calls        atomic.Int64
 }
 
 func (s *stubBackend) Execute(ctx context.Context, spec backend.WorkloadSpec) (backend.WorkloadResult, error) {
@@ -47,6 +48,13 @@ func (s *stubBackend) Execute(ctx context.Context, spec backend.WorkloadSpec) (b
 	if spec.LogWriter != nil {
 		for _, line := range s.logLines {
 			spec.LogWriter(line)
+			if s.logLineDelay > 0 {
+				select {
+				case <-time.After(s.logLineDelay):
+				case <-ctx.Done():
+					return backend.WorkloadResult{}, ctx.Err()
+				}
+			}
 		}
 	}
 
