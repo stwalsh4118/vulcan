@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -335,5 +336,163 @@ func TestListBackendsEmpty(t *testing.T) {
 
 	if len(backends) != 0 {
 		t.Errorf("expected 0 backends, got %d", len(backends))
+	}
+}
+
+// --- code_archive validation tests ---
+
+// validGzipBase64 returns a base64-encoded minimal gzip stream.
+func validGzipBase64() string {
+	// Minimal valid gzip: magic (1f 8b), method=deflate (08), flags=0, mtime=0,
+	// xfl=0, os=unix(03), empty deflate block, crc32=0, isize=0.
+	gzipData := []byte{
+		0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+	}
+	return base64.StdEncoding.EncodeToString(gzipData)
+}
+
+func TestCreateWorkloadWithCodeArchive(t *testing.T) {
+	srv := newTestServer(t)
+	ts := httptest.NewServer(srv.Router())
+	defer ts.Close()
+
+	body := fmt.Sprintf(`{"runtime":"node","code_archive":"%s"}`, validGzipBase64())
+	resp, err := http.Post(ts.URL+"/v1/workloads", "application/json", bytes.NewBufferString(body))
+	if err != nil {
+		t.Fatalf("POST /v1/workloads: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("status = %d, want 201", resp.StatusCode)
+	}
+
+	var wl model.Workload
+	if err := json.NewDecoder(resp.Body).Decode(&wl); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if wl.Status != model.StatusPending {
+		t.Errorf("Status = %q, want %q", wl.Status, model.StatusPending)
+	}
+}
+
+func TestCreateWorkloadCodeAndArchiveMutuallyExclusive(t *testing.T) {
+	srv := newTestServer(t)
+	ts := httptest.NewServer(srv.Router())
+	defer ts.Close()
+
+	body := fmt.Sprintf(`{"runtime":"node","code":"console.log('hi')","code_archive":"%s"}`, validGzipBase64())
+	resp, err := http.Post(ts.URL+"/v1/workloads", "application/json", bytes.NewBufferString(body))
+	if err != nil {
+		t.Fatalf("POST /v1/workloads: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+
+	var errResp map[string]string
+	json.NewDecoder(resp.Body).Decode(&errResp)
+	if errResp["error"] != "code and code_archive are mutually exclusive" {
+		t.Errorf("error = %q, want mutual exclusivity message", errResp["error"])
+	}
+}
+
+func TestCreateWorkloadInvalidBase64Archive(t *testing.T) {
+	srv := newTestServer(t)
+	ts := httptest.NewServer(srv.Router())
+	defer ts.Close()
+
+	body := `{"runtime":"node","code_archive":"not-valid-base64!!!"}`
+	resp, err := http.Post(ts.URL+"/v1/workloads", "application/json", bytes.NewBufferString(body))
+	if err != nil {
+		t.Fatalf("POST /v1/workloads: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+
+	var errResp map[string]string
+	json.NewDecoder(resp.Body).Decode(&errResp)
+	if errResp["error"] != "code_archive must be valid base64" {
+		t.Errorf("error = %q, want base64 validation message", errResp["error"])
+	}
+}
+
+func TestCreateWorkloadNonGzipArchive(t *testing.T) {
+	srv := newTestServer(t)
+	ts := httptest.NewServer(srv.Router())
+	defer ts.Close()
+
+	// Valid base64 but not gzip data (plain text).
+	plainB64 := base64.StdEncoding.EncodeToString([]byte("this is not gzip data"))
+	body := fmt.Sprintf(`{"runtime":"node","code_archive":"%s"}`, plainB64)
+	resp, err := http.Post(ts.URL+"/v1/workloads", "application/json", bytes.NewBufferString(body))
+	if err != nil {
+		t.Fatalf("POST /v1/workloads: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+
+	var errResp map[string]string
+	json.NewDecoder(resp.Body).Decode(&errResp)
+	if errResp["error"] != "code_archive must be a gzip-compressed archive" {
+		t.Errorf("error = %q, want gzip validation message", errResp["error"])
+	}
+}
+
+func TestAsyncWorkloadWithCodeArchive(t *testing.T) {
+	srv := newTestServer(t)
+	ts := httptest.NewServer(srv.Router())
+	defer ts.Close()
+
+	body := fmt.Sprintf(`{"runtime":"node","code_archive":"%s"}`, validGzipBase64())
+	resp, err := http.Post(ts.URL+"/v1/workloads/async", "application/json", bytes.NewBufferString(body))
+	if err != nil {
+		t.Fatalf("POST /v1/workloads/async: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		t.Errorf("status = %d, want 202", resp.StatusCode)
+	}
+
+	var wl model.Workload
+	if err := json.NewDecoder(resp.Body).Decode(&wl); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if wl.Status != model.StatusPending {
+		t.Errorf("Status = %q, want %q", wl.Status, model.StatusPending)
+	}
+}
+
+func TestAsyncWorkloadCodeAndArchiveMutuallyExclusive(t *testing.T) {
+	srv := newTestServer(t)
+	ts := httptest.NewServer(srv.Router())
+	defer ts.Close()
+
+	body := fmt.Sprintf(`{"runtime":"node","code":"console.log('hi')","code_archive":"%s"}`, validGzipBase64())
+	resp, err := http.Post(ts.URL+"/v1/workloads/async", "application/json", bytes.NewBufferString(body))
+	if err != nil {
+		t.Fatalf("POST /v1/workloads/async: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+
+	var errResp map[string]string
+	json.NewDecoder(resp.Body).Decode(&errResp)
+	if errResp["error"] != "code and code_archive are mutually exclusive" {
+		t.Errorf("error = %q, want mutual exclusivity message", errResp["error"])
 	}
 }
