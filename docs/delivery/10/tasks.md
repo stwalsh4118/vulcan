@@ -8,10 +8,10 @@ This document lists all tasks associated with PBI 10.
 
 | Task ID | Name | Status | Description |
 | :------ | :--- | :----- | :---------- |
-| 10-1 | [Add `event: done` SSE termination to Go backend](./10-1.md) | Review | Send explicit `event: done` SSE event before closing the log stream when a workload reaches terminal state; update API spec |
-| 10-2 | [Create Next.js streaming API route for SSE proxy](./10-2.md) | Review | Add a Next.js App Router route handler that pipes SSE from the Go backend to the browser without buffering |
-| 10-3 | [Update useLogStream hook for clean shutdown](./10-3.md) | Review | Handle `done` event to close EventSource cleanly; remove blind onerror reconnect logic |
-| 10-4 | [E2E CoS Test — Real-time streaming and clean shutdown](./10-4.md) | Review | Verify real-time log delivery, done event, clean connection teardown, and no regressions |
+| 10-1 | [Add `event: done` SSE termination to Go backend](./10-1.md) | Done | Send explicit `event: done` SSE event before closing the log stream when a workload reaches terminal state; update API spec |
+| 10-2 | [Create Next.js streaming API route for SSE proxy](./10-2.md) | Done | Add a Next.js App Router route handler that pipes SSE from the Go backend to the browser without buffering |
+| 10-3 | [Update useLogStream hook for clean shutdown](./10-3.md) | Done | Handle `done` event to close EventSource cleanly; remove blind onerror reconnect logic |
+| 10-4 | [E2E CoS Test — Real-time streaming and clean shutdown](./10-4.md) | Done | Verify real-time log delivery, done event, clean connection teardown, and no regressions |
 
 ## Dependency Graph
 
