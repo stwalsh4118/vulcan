@@ -28,6 +28,10 @@ type WorkloadSpec struct {
 	MemLimitMB int    `json:"mem_limit_mb"`
 	TimeoutS   int    `json:"timeout_s"`
 
+	// CodeArchive is a tar.gz archive containing the workload code.
+	// When set, it takes precedence over the Code field.
+	CodeArchive []byte `json:"code_archive,omitempty"`
+
 	// LogWriter is an optional callback that backends invoke to emit log lines
 	// during execution. Each call delivers one line to connected SSE subscribers.
 	LogWriter func(line string) `json:"-"`
