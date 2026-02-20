@@ -80,15 +80,16 @@ type Backend interface {
 }
 
 type WorkloadSpec struct {
-    ID         string
-    Runtime    string
-    Isolation  string
-    Code       string
-    Input      []byte
-    CPULimit   int
-    MemLimitMB int
-    TimeoutS   int
-    LogWriter  func(line string) `json:"-"` // optional log callback
+    ID          string
+    Runtime     string
+    Isolation   string
+    Code        string
+    CodeArchive []byte // tar.gz archive, mutually exclusive with Code
+    Input       []byte
+    CPULimit    int
+    MemLimitMB  int
+    TimeoutS    int
+    LogWriter   func(line string) `json:"-"` // optional log callback
 }
 
 type WorkloadResult struct {
@@ -205,6 +206,11 @@ SQLite implementation: `NewSQLiteStore(dbPath string) (*SQLiteStore, error)`
 Registered metrics:
 - `vulcan_http_requests_total{method, path, status}` (counter)
 - `vulcan_http_request_duration_seconds{method, path}` (histogram)
+- `vulcan_firecracker_vm_boot_seconds` (histogram) — VM boot duration
+- `vulcan_firecracker_active_vms` (gauge) — currently running microVMs
+- `vulcan_firecracker_vsock_workload_seconds` (histogram) — vsock workload execution time
+- `vulcan_firecracker_vm_cleanup_seconds` (histogram) — VM cleanup duration
+- `vulcan_firecracker_workloads_total{runtime, status}` (counter) — workloads processed
 
 ### POST /v1/workloads
 
@@ -214,15 +220,18 @@ Registered metrics:
   "runtime": "node",
   "isolation": "isolate",
   "code": "console.log('hello')",
+  "code_archive": "<base64-encoded tar.gz>",
   "input": {},
   "resources": {"cpus": 1, "mem_mb": 128, "timeout_s": 30}
 }
 ```
 - `runtime` is required; all other fields optional.
+- `code_archive` (optional): base64-encoded tar.gz archive. Mutually exclusive with `code`; the server returns 400 if both are provided.
+- Max body size: 15 MB (to accommodate base64 overhead for 10 MB archives).
 
 **Response:** `201 Created` — full Workload object with `status: "pending"`, generated ULID `id`.
 
-**Errors:** `400` — missing runtime or invalid JSON.
+**Errors:** `400` — missing runtime, invalid JSON, or invalid base64 in `code_archive`.
 
 ### POST /v1/workloads/async
 

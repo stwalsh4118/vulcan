@@ -13,19 +13,24 @@ import (
 	"github.com/seantiz/vulcan/internal/store"
 )
 
+// errValidation is a sentinel used by parseCodeFields to signal that an error
+// response has already been written to the client.
+var errValidation = errors.New("validation error")
+
 const (
 	defaultListLimit = 20
 	maxListLimit     = 100
-	maxBodySize      = 1 << 20 // 1 MB
+	maxBodySize      = 15 << 20 // 15 MB (base64 overhead for 10 MB archives)
 )
 
 // createWorkloadRequest is the JSON body for POST /v1/workloads.
 type createWorkloadRequest struct {
-	Runtime   string          `json:"runtime"`
-	Isolation string          `json:"isolation"`
-	Code      string          `json:"code"`
-	Input     json.RawMessage `json:"input"`
-	Resources *resourcesReq   `json:"resources"`
+	Runtime     string          `json:"runtime"`
+	Isolation   string          `json:"isolation"`
+	Code        string          `json:"code"`
+	CodeArchive string          `json:"code_archive"`
+	Input       json.RawMessage `json:"input"`
+	Resources   *resourcesReq   `json:"resources"`
 }
 
 type resourcesReq struct {
@@ -69,6 +74,11 @@ func (s *Server) handleCreateWorkload(w http.ResponseWriter, r *http.Request) {
 		wl.CPULimit = req.Resources.CPUs
 		wl.MemLimit = req.Resources.MemMB
 		wl.TimeoutS = req.Resources.TimeoutS
+	}
+
+	// Validate and pass code through (transient, not persisted).
+	if err := s.parseCodeFields(&req, wl, w); err != nil {
+		return // error already written
 	}
 
 	if err := s.store.CreateWorkload(r.Context(), wl); err != nil {

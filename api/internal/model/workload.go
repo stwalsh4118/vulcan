@@ -78,4 +78,9 @@ type Workload struct {
 	CreatedAt  time.Time  `json:"created_at"`
 	StartedAt  *time.Time `json:"started_at,omitempty"`
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
+
+	// Code and CodeArchive are transient fields passed through to the backend
+	// during execution. They are not persisted to the database.
+	Code        string `json:"-"`
+	CodeArchive []byte `json:"-"`
 }

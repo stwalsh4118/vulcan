@@ -129,6 +129,25 @@ export default function WorkloadDetailPage({
         <InfoCard label="Finished" value={formatTimestamp(workload.finished_at)} />
       </div>
 
+      {/* MicroVM Details */}
+      {workload.isolation === "microvm" && (
+        <section className="mb-6">
+          <h2 className="text-sm font-medium text-muted-foreground mb-2">
+            MicroVM Details
+          </h2>
+          <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center rounded-full bg-purple-500/10 border border-purple-500/20 px-3 py-1 text-xs font-medium text-purple-400">
+                Firecracker
+              </span>
+              <span className="inline-flex items-center rounded-full bg-blue-500/10 border border-blue-500/20 px-3 py-1 text-xs font-medium text-blue-400">
+                {workload.runtime}
+              </span>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Output */}
       {workload.output && (
         <section className="mb-6">

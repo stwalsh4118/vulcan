@@ -59,4 +59,4 @@ The backend interface exists (PBI-2) and the frontend is ready (PBI-3), but no a
 
 ## Related Tasks
 
-_Tasks will be created when this PBI moves to Agreed via `/plan-pbi 4`._
+[View Tasks](./tasks.md)

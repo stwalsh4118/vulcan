@@ -70,6 +70,7 @@ export interface CreateWorkloadRequest {
   runtime: Runtime;
   isolation?: IsolationMode;
   code?: string;
+  code_archive?: string;
   input?: Record<string, unknown>;
   resources?: {
     cpus?: number;

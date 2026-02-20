@@ -91,10 +91,12 @@ func (e *Engine) execute(w *model.Workload) {
 	// for historical viewing, then publish to LogBroker for real-time SSE.
 	var seq atomic.Int32
 	spec := backend.WorkloadSpec{
-		ID:        w.ID,
-		Runtime:   w.Runtime,
-		Isolation: w.Isolation,
-		TimeoutS:  timeoutS,
+		ID:          w.ID,
+		Runtime:     w.Runtime,
+		Isolation:   w.Isolation,
+		Code:        w.Code,
+		CodeArchive: w.CodeArchive,
+		TimeoutS:    timeoutS,
 		LogWriter: func(line string) {
 			currentSeq := int(seq.Add(1) - 1)
 			if err := e.store.InsertLogLine(ctx, w.ID, currentSeq, line); err != nil {
