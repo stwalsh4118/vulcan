@@ -235,10 +235,17 @@ func TestPBI9_AC4_SSEStreamingUnchanged(t *testing.T) {
 
 	scanner := bufio.NewScanner(sseResp.Body)
 	var events []string
+	inNamedEvent := false
 	for scanner.Scan() {
 		line := scanner.Text()
-		if data, ok := strings.CutPrefix(line, "data: "); ok {
-			events = append(events, data)
+		if _, ok := strings.CutPrefix(line, "event: "); ok {
+			inNamedEvent = true
+		} else if data, ok := strings.CutPrefix(line, "data: "); ok {
+			if !inNamedEvent {
+				events = append(events, data)
+			}
+		} else if line == "" {
+			inNamedEvent = false
 		}
 	}
 
@@ -274,10 +281,17 @@ func TestPBI9_SSELinesMatchPersistedLines(t *testing.T) {
 
 	scanner := bufio.NewScanner(sseResp.Body)
 	var sseLines []string
+	inNamedEvent := false
 	for scanner.Scan() {
 		line := scanner.Text()
-		if data, ok := strings.CutPrefix(line, "data: "); ok {
-			sseLines = append(sseLines, data)
+		if _, ok := strings.CutPrefix(line, "event: "); ok {
+			inNamedEvent = true
+		} else if data, ok := strings.CutPrefix(line, "data: "); ok {
+			if !inNamedEvent {
+				sseLines = append(sseLines, data)
+			}
+		} else if line == "" {
+			inNamedEvent = false
 		}
 	}
 

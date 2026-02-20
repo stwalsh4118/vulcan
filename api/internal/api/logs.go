@@ -61,7 +61,12 @@ func (s *Server) handleStreamLogs(w http.ResponseWriter, r *http.Request) {
 		select {
 		case line, ok := <-ch:
 			if !ok {
-				return // Workload finished; broker closed the channel.
+				// Workload finished; send explicit done event before closing.
+				_ = writeSSEEvent(w, "done", "stream complete")
+				if canFlush {
+					flusher.Flush()
+				}
+				return
 			}
 			if err := writeSSEData(w, line); err != nil {
 				return // Write failed (e.g. client gone).
@@ -136,4 +141,15 @@ func writeSSEData(w http.ResponseWriter, line string) error {
 	// Blank line terminates the event.
 	_, err := fmt.Fprint(w, "\n")
 	return err
+}
+
+// writeSSEEvent writes a named SSE event (event: <type>\ndata: <data>\n\n).
+func writeSSEEvent(w http.ResponseWriter, eventType, data string) error {
+	if _, err := fmt.Fprintf(w, "event: %s\n", eventType); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+		return err
+	}
+	return nil
 }
