@@ -280,11 +280,17 @@ Server-Sent Events stream of log lines from a running workload.
 
 **Headers:** `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`
 
-**Events:** Each log line sent as `data: <line>\n\n`. Multi-line data is split per SSE spec.
+**Event types:**
+
+| Event | Format | When |
+|-------|--------|------|
+| _(unnamed)_ | `data: <line>\n\n` | Each log line from the workload. Multi-line data is split per SSE spec. |
+| `done` | `event: done\ndata: stream complete\n\n` | Sent once when the workload reaches terminal state, immediately before the stream closes. |
 
 **Behavior:**
-- If workload is in a terminal state, returns 200 with empty stream (closes immediately).
-- Stream closes when workload finishes or client disconnects.
+- If workload is in a terminal state, returns 200 with empty stream (closes immediately; no `done` event).
+- For active workloads, log lines stream as unnamed events. When the workload finishes, a `done` event is sent before the connection closes.
+- Stream also closes if the client disconnects (no `done` event sent in this case).
 
 **Errors:** `404` — workload not found.
 

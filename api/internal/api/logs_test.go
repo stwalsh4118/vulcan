@@ -69,6 +69,36 @@ func TestStreamLogsCompletedWorkload(t *testing.T) {
 	}
 }
 
+// sseEvent represents a parsed Server-Sent Event.
+type sseEvent struct {
+	Type string // empty for unnamed events
+	Data string
+}
+
+// parseSSEEvents reads all SSE events from a scanner, grouping data lines
+// by blank-line separators and capturing optional event type fields.
+func parseSSEEvents(scanner *bufio.Scanner) []sseEvent {
+	var events []sseEvent
+	var currentType string
+	var currentData []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if et, ok := strings.CutPrefix(line, "event: "); ok {
+			currentType = et
+		} else if data, ok := strings.CutPrefix(line, "data: "); ok {
+			currentData = append(currentData, data)
+		} else if line == "" && len(currentData) > 0 {
+			events = append(events, sseEvent{Type: currentType, Data: strings.Join(currentData, "\n")})
+			currentType = ""
+			currentData = nil
+		}
+	}
+	if len(currentData) > 0 {
+		events = append(events, sseEvent{Type: currentType, Data: strings.Join(currentData, "\n")})
+	}
+	return events
+}
+
 func TestStreamLogsReceivesEvents(t *testing.T) {
 	srv := newTestServer(t)
 
@@ -112,24 +142,20 @@ func TestStreamLogsReceivesEvents(t *testing.T) {
 	broker.Publish(wl.ID, "goodbye")
 	broker.Close(wl.ID)
 
-	// Read SSE events from the response body.
-	scanner := bufio.NewScanner(resp.Body)
-	var events []string
-	for scanner.Scan() {
-		line := scanner.Text()
-		if data, ok := strings.CutPrefix(line, "data: "); ok {
-			events = append(events, data)
-		}
-	}
+	// Parse SSE events from the response body.
+	events := parseSSEEvents(bufio.NewScanner(resp.Body))
 
-	if len(events) != 2 {
-		t.Fatalf("got %d events, want 2: %v", len(events), events)
+	if len(events) != 3 {
+		t.Fatalf("got %d events, want 3: %v", len(events), events)
 	}
-	if events[0] != "hello world" {
-		t.Errorf("event[0] = %q, want %q", events[0], "hello world")
+	if events[0].Data != "hello world" || events[0].Type != "" {
+		t.Errorf("event[0] = %+v, want unnamed data %q", events[0], "hello world")
 	}
-	if events[1] != "goodbye" {
-		t.Errorf("event[1] = %q, want %q", events[1], "goodbye")
+	if events[1].Data != "goodbye" || events[1].Type != "" {
+		t.Errorf("event[1] = %+v, want unnamed data %q", events[1], "goodbye")
+	}
+	if events[2].Type != "done" || events[2].Data != "stream complete" {
+		t.Errorf("event[2] = %+v, want done event with data %q", events[2], "stream complete")
 	}
 }
 
@@ -285,26 +311,18 @@ func TestStreamLogsMultiLineData(t *testing.T) {
 	broker.Publish(wl.ID, "error: something failed\n  at main.go:42\n  at handler.go:10")
 	broker.Close(wl.ID)
 
-	// Parse SSE events: consecutive "data:" lines form one event, separated by blank lines.
-	scanner := bufio.NewScanner(resp.Body)
-	var events []string
-	var current []string
-	for scanner.Scan() {
-		line := scanner.Text()
-		if data, ok := strings.CutPrefix(line, "data: "); ok {
-			current = append(current, data)
-		} else if line == "" && len(current) > 0 {
-			events = append(events, strings.Join(current, "\n"))
-			current = nil
-		}
-	}
+	// Parse SSE events using the shared parser.
+	events := parseSSEEvents(bufio.NewScanner(resp.Body))
 
-	if len(events) != 1 {
-		t.Fatalf("got %d events, want 1: %v", len(events), events)
+	if len(events) != 2 {
+		t.Fatalf("got %d events, want 2: %v", len(events), events)
 	}
 
 	want := "error: something failed\n  at main.go:42\n  at handler.go:10"
-	if events[0] != want {
-		t.Errorf("event = %q, want %q", events[0], want)
+	if events[0].Data != want || events[0].Type != "" {
+		t.Errorf("event[0] = %+v, want unnamed data %q", events[0], want)
+	}
+	if events[1].Type != "done" || events[1].Data != "stream complete" {
+		t.Errorf("event[1] = %+v, want done event with data %q", events[1], "stream complete")
 	}
 }
