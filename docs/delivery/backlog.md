@@ -16,6 +16,7 @@
 | 7 | User | As a user, I want a CLI tool to submit and manage workloads from the terminal so that I can script and automate compute tasks | Proposed | `vulcan run` executes workloads (inline, file, OCI); `vulcan status` shows workload state; `vulcan logs -f` streams logs; `vulcan ls` lists workloads; `vulcan nodes` shows cluster; `vulcan benchmark` runs comparison suite |
 | 8 | User | As a user, I want a monitoring and benchmark dashboard so that I can compare backend performance and view system health visually | Proposed | Dashboard shows node status and capacity; backend capabilities displayed; aggregate stats visualized; benchmark suite runnable from UI; comparison charts show cold start, throughput, memory per backend |
 | 9 | User | As a user, I want to view workload logs after execution completes so that I can debug and review past workloads | Done | Log lines persisted to SQLite during execution; API endpoint returns historical logs; frontend shows persisted logs for completed workloads; SSE still works for active workloads; seamless transition from live to historical |
+| 11 | Developer | As a developer, I want to store configuration in a `.env` file so that I can start the server without passing environment variables on every command | Proposed | `.env` file in project root loaded at startup; explicit env vars override `.env` values; `.env.example` documents all `VULCAN_*` variables; `.env` added to `.gitignore`; existing behavior unchanged when no `.env` exists |
 
 _Items are ordered by priority (highest first)._
 
@@ -33,6 +34,7 @@ _Items are ordered by priority (highest first)._
 | 8 | Monitoring & Benchmark Dashboard | [View Details](./8/prd.md) |
 | 9 | Log Persistence & Historical Log Viewing | [View Details](./9/prd.md) |
 | 10 | Real-Time Log Streaming Fixes | [View Details](./10/prd.md) |
+| 11 | .env File Configuration Support | [View Details](./11/prd.md) |
 
 ## History
 
@@ -59,3 +61,4 @@ _Items are ordered by priority (highest first)._
 | 2026-02-20 08:20:23 | 10 | Status Change | Proposed → Agreed. Auto-approved for planning. | AI_Agent |
 | 2026-02-20 08:32:20 | 10 | Status Change | Agreed → InProgress. Started implementation. | AI_Agent |
 | 2026-02-20 16:15:39 | 10 | Status Change | InProgress → Done. All 4 tasks completed and verified. | AI_Agent |
+| 20260301-222953 | 11 | Created | PBI created from feature request: .env file configuration support for developer workflow. | AI_Agent |
